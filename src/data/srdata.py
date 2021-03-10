@@ -83,8 +83,8 @@ class SRData(data.Dataset):
 
     def _set_filesystem(self, dir_data):
         self.apath = os.path.join(dir_data, self.name)
-        self.dir_hr = os.path.join(self.apath, 'HR')
-        self.dir_lr = os.path.join(self.apath, 'LR_bicubic')
+        self.dir_hr = os.path.join(self.apath, 'HR_cropped')
+        self.dir_lr = os.path.join(self.apath, 'LR_bicubic_cropped')
         if self.input_large: self.dir_lr += 'L'
         self.ext = ('.png', '.png')
 
@@ -143,6 +143,7 @@ class SRData(data.Dataset):
                 input_large=self.input_large
             )
             if not self.args.no_augment: lr, hr = common.augment(lr, hr)
+            if self.args.noise_augment: lr = common.noise_augment(lr)
         else:
             ih, iw = lr.shape[:2]
             hr = hr[0:ih * scale, 0:iw * scale]

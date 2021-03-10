@@ -2,8 +2,9 @@ import random
 
 import numpy as np
 import skimage.color as sc
-
+from skimage.util import random_noise
 import torch
+import cv2
 
 def get_patch(*args, patch_size=96, scale=2, multi=False, input_large=False):
     ih, iw = args[0].shape[:2]
@@ -70,3 +71,14 @@ def augment(*args, hflip=True, rot=True):
 
     return [_augment(a) for a in args]
 
+def noise_augment(*args, noise='salt_pepper'):
+    img = args[0]
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    img = np.array(img)
+    noiseL = [0,10]
+    noise_level = np.random.uniform(noiseL[0],noiseL[1], size=None)
+    noise_level = noise_level/255.0
+    im_ga = random_noise(img, mode='gaussian', var=noise_level, clip=True)
+    im_ga = np.array(255*im_ga, dtype='uint8')
+    img = cv2.cvtColor(im_ga, cv2.COLOR_GRAY2BGR)
+    return img
