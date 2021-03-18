@@ -32,16 +32,9 @@ class EDSR(nn.Module):
         self.add_mean = common.MeanShift(args.rgb_range, sign=1)
 
         # define head module
-        m_head1 = [
-                nn.MaxPool2d(kernel_size=2, stride=2), 
-                conv(n_feats, n_feats, kernel_size),
-                nn.MaxPool2d(kernel_size=2, stride=2),
-                conv(n_feats, n_feats, kernel_size)
-                ] 
-        m_head2 = [
-                nn.MaxPool2d(kernel_size=2, stride=2),
-                conv(args.n_colors, n_feats, kernel_size)
-                ]
+        m_head1 = [conv(args.n_colors, n_feats, kernel_size)]
+        m_head2 = [nn.MaxPool2d(kernel_size=2, stride=2)]
+
         # define body module
         m_body = [
             common.ResBlock(
@@ -51,60 +44,34 @@ class EDSR(nn.Module):
         m_body.append(conv(n_feats, n_feats, kernel_size))
 
         # define tail module
-  	m_tail_1 = [
-            common.Upsampler(conv, 2, n_feats, act=False),
-            conv(n_feats, n_feats, kernel_size)
+        m_tail1 = [
+            common.Upsampler(conv, 2, n_feats, act=False)
         ]
-    	m_tail_2 = [
-            common.Upsampler(conv, 2, n_feats, act=False),
-            conv(n_feats, n_feats, kernel_size)
-        ]
-        m_tail_3 = [
-            common.Upsampler(conv, 2, n_feats, act=False),
-            conv(n_feats, args.n_colors, kernel_size)
-        ]
-        
-       # define another flow of pooling module, pool_depth = 3 
-        m_pool_1 = [
-                nn.MaxPool2d(kernel_size=2, stride=2)
-        ]
-
-        m_pool_2 = [
-                nn.MaxPool2d(kernel_size=2, stride=2)
-        ]
-
+        m_tail2 = [
+		conv(n_feats, args.n_colors, kernel_size)
+	]
         self.head1 = nn.Sequential(*m_head1)
         self.head2 = nn.Sequential(*m_head2)
         self.body = nn.Sequential(*m_body)
-        self.tail_1 = nn.Sequential(*m_tail_1)
-        self.tail_2 = nn.Sequential(*m_tail_2)
-        self.tail_3 = nn.Sequential(*m_tail_3)
-        
-        self.pool_1 = nn.Sequential(*m_pool_1)
-        self.pool_2 = nn.Sequential(*m_pool_2)
-    
+        self.tail1 = nn.Sequential(*m_tail1)
+        self.tail2 = nn.Sequential(*m_tail2)
+
     def forward(self, x):
         x = self.sub_mean(x)
-        x1 = self.head2(x)
-        y = self.head1(x1)
-        x2 = self.pool_1(x1)
-        x3 = self.pool_2(x2)
+        y = self.head1(x)
+	
+        y_p = self.head2(y)	
 
-        res = self.body(y)
-        res += x3
+        res = self.body(y_p)
+        res += y_p
 
-        z1 = self.tail_1(res)
-        z1 += x2
+        z1 = self.tail1(res)
+        z1 += y
+        z2 = self.tail2(z1)
+        z2 += x
+        x = self.add_mean(z2)
 
-        z2 = self.tail_2(z1)
-        z2 += x1
-
-        z3 = self.tail_3(z2)
-        z3 += x
-       
-        x = self.add_mean(z3)
-
-        return x
+        return x 
 
     def load_state_dict(self, state_dict, strict=True):
         own_state = self.state_dict()
