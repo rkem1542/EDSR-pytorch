@@ -1,7 +1,10 @@
 import os
 import math
 from decimal import Decimal
-
+## modified by sjyang
+import lpips
+import matplotlib.pyplot as plt
+##
 import utility
 
 import torch
@@ -84,6 +87,7 @@ class Trainer():
         timer_test = utility.timer()
         if self.args.save_results: self.ckp.begin_background()
         for idx_data, d in enumerate(self.loader_test):
+            dist = 0
             for idx_scale, scale in enumerate(self.scale):
                 d.dataset.set_scale(idx_scale)
                 for lr, hr, filename in tqdm(d, ncols=80):
@@ -95,23 +99,39 @@ class Trainer():
                     self.ckp.log[-1, idx_data, idx_scale] += utility.calc_psnr(
                         sr, hr, scale, self.args.rgb_range, dataset=d
                     )
+                    ## modified by sjyang
+                    loss_fn = lpips.LPIPS(net='alex', version=0.1)
+                    loss_fn.cuda()
+                    #img1_tensor = lpips.im2tensor(sr)
+                    #img2_tensor = lpips.im2tensor(hr)
+                    #img1_tensor = img1_tensor.cuda()
+                    #img2_tensor = img2_tensor.cuda()
+                    sr = sr.cuda()
+                    hr = hr.cuda()
+                    dist += loss_fn.forward(sr, hr)
+                    ##
+                    
                     if self.args.save_gt:
                         save_list.extend([lr, hr])
 
                     if self.args.save_results:
                         self.ckp.save_results(d, filename[0], save_list, scale)
-
+                lpips_print_tensor = dist/len(d)
+                lpips_print_tensor = lpips_print_tensor.squeeze(-1).squeeze(-1).squeeze(-1) ## now 1x1 tensor
+                dist=0
                 self.ckp.log[-1, idx_data, idx_scale] /= len(d)
                 best = self.ckp.log.max(0)
                 self.ckp.write_log(
-                    '[{} x{}]\tPSNR: {:.3f} (Best: {:.3f} @epoch {})'.format(
+                    '[{} x{}]\tPSNR: {:.3f} LPIPS: {:.4f} (Best: {:.3f} @epoch {})'.format(
                         d.dataset.name,
                         scale,
                         self.ckp.log[-1, idx_data, idx_scale],
+                        lpips_print_tensor.tolist()[0],
                         best[0][idx_data, idx_scale],
                         best[1][idx_data, idx_scale] + 1
                     )
                 )
+                
 
         self.ckp.write_log('Forward: {:.2f}s\n'.format(timer_test.toc()))
         self.ckp.write_log('Saving...')
